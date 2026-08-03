@@ -123,11 +123,16 @@ def build_full_index(dataset_root: str) -> pd.DataFrame:
 # -----------------------------------------------------------------------
 # STEP 4: Patient-level stratified subsampling
 # -----------------------------------------------------------------------
-# Max images to take from any single patient, for the majority classes.
-# This forces the sample to draw from many patients instead of a few
-# patients with lots of slices each -- patient diversity matters more
-# than raw image count for generalization.
-MAX_IMAGES_PER_PATIENT = 40
+# Max images per patient, per class. Defaults to 40, but classes with a
+# small total patient pool (like Mild Dementia, which only has 21 patients
+# in the source data) get a higher cap so we can still approach the target
+# image count -- since we're already using every available patient for
+# that class, raising the cap doesn't reduce diversity, it just uses more
+# of what those patients already have.
+DEFAULT_MAX_PER_PATIENT = 40
+MAX_PER_PATIENT_OVERRIDES = {
+    "Mild Dementia": 75,
+}
 
 
 def subsample_by_patient(full_index: pd.DataFrame) -> pd.DataFrame:
@@ -161,15 +166,19 @@ def subsample_by_patient(full_index: pd.DataFrame) -> pd.DataFrame:
         running_total = 0
         patients_used = 0
 
+        max_per_patient = MAX_PER_PATIENT_OVERRIDES.get(
+            class_name, DEFAULT_MAX_PER_PATIENT
+        )
+
         for pid in patient_ids:
             if running_total >= target:
                 break
             patient_rows = class_df[class_df["patient_id"] == pid]
             # Cap this patient's contribution -- take a random subset if
-            # they have more than MAX_IMAGES_PER_PATIENT slices available.
-            if len(patient_rows) > MAX_IMAGES_PER_PATIENT:
+            # they have more than max_per_patient slices available.
+            if len(patient_rows) > max_per_patient:
                 patient_rows = patient_rows.sample(
-                    n=MAX_IMAGES_PER_PATIENT, random_state=RANDOM_SEED
+                    n=max_per_patient, random_state=RANDOM_SEED
                 )
             selected_rows.append(patient_rows)
             running_total += len(patient_rows)
@@ -179,7 +188,7 @@ def subsample_by_patient(full_index: pd.DataFrame) -> pd.DataFrame:
         sampled_frames.append(class_sample)
         print(f"{class_name}: sampled {len(class_sample)} images "
               f"(target was {target}) from {patients_used} patients "
-              f"(cap: {MAX_IMAGES_PER_PATIENT}/patient)")
+              f"(cap: {max_per_patient}/patient)")
 
     result = pd.concat(sampled_frames, ignore_index=True)
     return result
