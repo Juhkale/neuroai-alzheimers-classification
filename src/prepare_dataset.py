@@ -123,15 +123,23 @@ def build_full_index(dataset_root: str) -> pd.DataFrame:
 # -----------------------------------------------------------------------
 # STEP 4: Patient-level stratified subsampling
 # -----------------------------------------------------------------------
+# Max images to take from any single patient, for the majority classes.
+# This forces the sample to draw from many patients instead of a few
+# patients with lots of slices each -- patient diversity matters more
+# than raw image count for generalization.
+MAX_IMAGES_PER_PATIENT = 40
+
+
 def subsample_by_patient(full_index: pd.DataFrame) -> pd.DataFrame:
     """
-    For each class, randomly shuffles the PATIENTS (not images) and adds
-    whole patients to the sample until we hit the target image count for
-    that class. This guarantees:
-      1. No patient is split -- all of a selected patient's slices in that
-         class come along together.
-      2. The final counts are close to (but may slightly exceed) the
-         targets, since we add whole patients, not partial ones.
+    For each class, shuffles patients and adds a CAPPED number of images
+    per patient until the target image count is reached. This maximizes
+    the number of unique patients represented in the sample, which matters
+    more for generalization than raw image count does.
+
+    Moderate Dementia is a special case: only 2 patients exist in the
+    entire source dataset for this class, so capping wouldn't help --
+    we keep every image and document this as a known limitation instead.
     """
     random.seed(RANDOM_SEED)
     sampled_frames = []
@@ -140,28 +148,38 @@ def subsample_by_patient(full_index: pd.DataFrame) -> pd.DataFrame:
         class_df = full_index[full_index["class"] == class_name]
 
         if target is None:
-            # Keep everything -- this is the Moderate Dementia case
             sampled_frames.append(class_df)
             print(f"{class_name}: kept all {len(class_df)} images "
-                  f"({class_df['patient_id'].nunique()} patients)")
+                  f"({class_df['patient_id'].nunique()} patients) "
+                  f"-- limited patient pool, see README limitations")
             continue
 
         patient_ids = class_df["patient_id"].unique().tolist()
         random.shuffle(patient_ids)
 
-        selected_patients = []
+        selected_rows = []
         running_total = 0
+        patients_used = 0
+
         for pid in patient_ids:
             if running_total >= target:
                 break
-            n_images_for_patient = (class_df["patient_id"] == pid).sum()
-            selected_patients.append(pid)
-            running_total += n_images_for_patient
+            patient_rows = class_df[class_df["patient_id"] == pid]
+            # Cap this patient's contribution -- take a random subset if
+            # they have more than MAX_IMAGES_PER_PATIENT slices available.
+            if len(patient_rows) > MAX_IMAGES_PER_PATIENT:
+                patient_rows = patient_rows.sample(
+                    n=MAX_IMAGES_PER_PATIENT, random_state=RANDOM_SEED
+                )
+            selected_rows.append(patient_rows)
+            running_total += len(patient_rows)
+            patients_used += 1
 
-        class_sample = class_df[class_df["patient_id"].isin(selected_patients)]
+        class_sample = pd.concat(selected_rows, ignore_index=True)
         sampled_frames.append(class_sample)
         print(f"{class_name}: sampled {len(class_sample)} images "
-              f"(target was {target}) from {len(selected_patients)} patients")
+              f"(target was {target}) from {patients_used} patients "
+              f"(cap: {MAX_IMAGES_PER_PATIENT}/patient)")
 
     result = pd.concat(sampled_frames, ignore_index=True)
     return result
