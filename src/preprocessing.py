@@ -38,7 +38,13 @@ SPLIT_MANIFEST = "data/manifest_split.csv"
 
 CLASS_NAMES = ["Non Demented", "Very mild Dementia", "Mild Dementia", "Moderate Dementia"]
 CLASS_TO_INDEX = {name: i for i, name in enumerate(CLASS_NAMES)}
-
+# Augmentation layers must be created ONCE, at module level -- not inside
+# augment_image() -- because tf.data traces that function as a tf.function,
+# and TensorFlow requires any tf.Variable (which these layers create
+# internally for their random seed state) to be created exactly once,
+# not re-created on every call.
+_rotation_layer = tf.keras.layers.RandomRotation(factor=0.04, seed=42)
+_zoom_layer = tf.keras.layers.RandomZoom(height_factor=0.1, seed=42)
 
 def load_and_preprocess_image(filepath: str, label: int):
     """
@@ -64,11 +70,8 @@ def augment_image(image, label):
     # Small random rotation (~10-15 degrees). tf.image doesn't have a
     # built-in rotation op, so we use a small-angle approximation via
     # tf.keras's RandomRotation layer, applied on the fly.
-    rotation_layer = tf.keras.layers.RandomRotation(factor=0.04)  # ~15 degrees max
-    image = rotation_layer(image, training=True)
-
-    zoom_layer = tf.keras.layers.RandomZoom(height_factor=0.1)
-    image = zoom_layer(image, training=True)
+    image = _rotation_layer(image, training=True)
+    image = _zoom_layer(image, training=True)
 
     # Clip back to valid [0, 1] range in case brightness/contrast pushed
     # values slightly out of bounds.
