@@ -68,7 +68,7 @@ def download_dataset() -> str:
 # Filenames look like: OAS1_0028_MR1_mpr-1_100.jpg
 #                        ^^^^ ^^^^
 #                      cohort patient_id
-PATIENT_ID_PATTERN = re.compile(r"OAS1_(\d+)_MR1")
+PATIENT_ID_PATTERN = re.compile(r"OAS1_(\d+)_MR\d+")
 
 
 def extract_patient_id(filename: str) -> str:
