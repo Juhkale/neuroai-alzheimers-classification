@@ -26,6 +26,8 @@ from src.models import build_baseline_cnn
 
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
 EPOCHS = 20
 CHECKPOINT_PATH = "models/baseline_cnn_best.keras"
 
@@ -69,17 +71,43 @@ def train():
         monitor="val_loss",
         save_best_only=True
     )
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss",
+        factor=0.5,        # halve the learning rate when triggered
+        patience=3,        # wait 3 epochs of no improvement before reducing
+        min_lr=1e-6         # don't shrink the learning rate below this floor
+    )
 
     history = model.fit(
         train_ds,
         validation_data=val_ds,
         epochs=EPOCHS,
         class_weight=class_weights,
-        callbacks=[early_stopping, checkpoint],
+        callbacks=[early_stopping, checkpoint, reduce_lr],
     )
 
     return model, history
 
 
+def plot_training_history(history):
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+    axes[0].plot(history.history["loss"], label="Train Loss")
+    axes[0].plot(history.history["val_loss"], label="Val Loss")
+    axes[0].set_title("Loss over Epochs")
+    axes[0].set_xlabel("Epoch")
+    axes[0].legend()
+
+    axes[1].plot(history.history["accuracy"], label="Train Accuracy")
+    axes[1].plot(history.history["val_accuracy"], label="Val Accuracy")
+    axes[1].set_title("Accuracy over Epochs")
+    axes[1].set_xlabel("Epoch")
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig("reports/training_curves.png", dpi=150)
+    plt.show()
+
 if __name__ == "__main__":
     model, history = train()
+    plot_training_history(history)
