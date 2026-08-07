@@ -16,7 +16,7 @@ def build_baseline_cnn(input_shape=(176, 176, 1), num_classes=4):
         tf.keras.layers.MaxPooling2D(pool_size=(2,2)),
 
         # Flatten the 2D feature maps into a 1D vector before Dense layers
-        tf.keras.layers.Flatten(),
+        tf.keras.layers.GlobalAveragePooling2D(),
 
         # A dense layer to combine features, then Dropout to reduce overfitting
         tf.keras.layers.Dense(128, activation="relu"),
