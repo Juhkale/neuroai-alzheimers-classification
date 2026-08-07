@@ -89,6 +89,24 @@ def to_three_channel(image, label):
     return image, label
 
 
+def resnet_preprocess(image, label):
+    """
+    Applies ResNet50's expected preprocessing (mean-centering based on
+    ImageNet statistics, RGB->BGR channel reordering). ResNet50's
+    pretrained weights were trained with this exact preprocessing --
+    feeding it plain 0-1 normalized images (which is what our baseline
+    CNN uses) would make the pretrained features far less useful, since
+    the input distribution wouldn't match what the network learned on.
+
+    IMPORTANT: this expects images in the 0-255 range, not 0-1 -- so
+    this must be applied to the RAW image, before our normal /255.0
+    normalization, or immediately after undoing it.
+    """
+    image = image * 255.0  # undo our earlier /255.0 normalization
+    image = tf.keras.applications.resnet50.preprocess_input(image)
+    return image, label
+
+
 def build_dataset(split_name: str, augment: bool = False, three_channel: bool = False) -> tf.data.Dataset:
     """
     Builds a tf.data.Dataset for the given split ("train", "val", or "test").
@@ -112,6 +130,7 @@ def build_dataset(split_name: str, augment: bool = False, three_channel: bool = 
 
     if three_channel:
         ds = ds.map(to_three_channel, num_parallel_calls=tf.data.AUTOTUNE)
+        ds = ds.map(resnet_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
 
     if split_name == "train":
         ds = ds.shuffle(buffer_size=len(filepaths), seed=42)
@@ -122,11 +141,8 @@ def build_dataset(split_name: str, augment: bool = False, three_channel: bool = 
 
 
 if __name__ == "__main__":
-    # Quick smoke test: build each split and print a batch's shape, so you
-    # can confirm the pipeline works before plugging it into a real model.
     for split in ["train", "val", "test"]:
         ds = build_dataset(split, augment=(split == "train"))
         for images, labels in ds.take(1):
             print(f"{split}: batch image shape = {images.shape}, "
                   f"batch label shape = {labels.shape}")
-        
