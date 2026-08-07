@@ -46,9 +46,13 @@ def compute_class_weights():
         classes=np.arange(len(CLASS_NAMES)),
         y=train_df["class"].map({name: i for i, name in enumerate(CLASS_NAMES)}).values
     )
+
     class_weights_dict = {i: weight for i, weight in enumerate(class_weights)}
+
+    max_weight = 2.0
+    class_weights_dict = {k: min(v, max_weight) for k, v in class_weights_dict.items()}
+
     return class_weights_dict
-    
 
 
 def train():
