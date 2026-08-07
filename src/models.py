@@ -32,7 +32,7 @@ def build_baseline_cnn(input_shape=(176, 176, 1), num_classes=4):
     ])
 
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005, clipnorm=1.0),
         loss='sparse_categorical_crossentropy',
         metrics=['accuracy']
     )
