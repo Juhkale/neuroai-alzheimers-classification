@@ -22,7 +22,6 @@ import tensorflow as tf
 from sklearn.utils.class_weight import compute_class_weight
 
 from src.preprocessing import build_dataset, CLASS_NAMES, SPLIT_MANIFEST
-from src.models import build_baseline_cnn
 
 import pandas as pd
 
@@ -114,11 +113,8 @@ def plot_training_history(history):
     plt.savefig("reports/training_curves.png", dpi=150)
     plt.show()
 
-if __name__ == "__main__":
-    model, history = train()
-    plot_training_history(history)
 
-    def train_resnet():
+def train_resnet():
     """
     Trains the ResNet50 transfer learning model. Uses three_channel=True
     since ResNet50 requires RGB input -- see preprocessing.py's
@@ -152,3 +148,8 @@ if __name__ == "__main__":
     )
 
     return model, history
+
+
+if __name__ == "__main__":
+    model, history = train()
+    plot_training_history(history)
