@@ -38,3 +38,39 @@ def build_baseline_cnn(input_shape=(176, 176, 1), num_classes=4):
     )
 
     return model
+
+def build_resnet_transfer_model(input_shape=(176, 176, 3), num_classes=4):
+    """
+    Transfer learning model using ResNet50, pretrained on ImageNet.
+
+    The base ResNet50 layers are FROZEN (not trainable) -- we only train
+    a small new classification head on top. This means we're training a
+    much smaller number of parameters starting from already-meaningful
+    features, which should be far more stable than the baseline CNN's
+    from-scratch training.
+
+    Note: requires 3-channel (RGB) input, since ResNet50 was trained on
+    color photos. Use build_dataset(..., three_channel=True) to feed this.
+    """
+    base_model = tf.keras.applications.ResNet50(
+        include_top=False,       # exclude ResNet's original 1000-class ImageNet output layer
+        weights="imagenet",       # load pretrained weights
+        input_shape=input_shape
+    )
+    base_model.trainable = False  # freeze -- do not update these weights during training
+
+    model = tf.keras.Sequential([
+        base_model,
+        tf.keras.layers.GlobalAveragePooling2D(),
+        tf.keras.layers.Dense(128, activation="relu"),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(num_classes, activation="softmax")
+    ])
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0005, clipnorm=1.0),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return model

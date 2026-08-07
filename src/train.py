@@ -28,6 +28,8 @@ import pandas as pd
 
 import matplotlib.pyplot as plt
 
+from src.models import build_baseline_cnn, build_resnet_transfer_model
+
 EPOCHS = 20
 CHECKPOINT_PATH = "models/baseline_cnn_best.keras"
 
@@ -115,3 +117,38 @@ def plot_training_history(history):
 if __name__ == "__main__":
     model, history = train()
     plot_training_history(history)
+
+    def train_resnet():
+    """
+    Trains the ResNet50 transfer learning model. Uses three_channel=True
+    since ResNet50 requires RGB input -- see preprocessing.py's
+    to_three_channel() for how that conversion happens.
+    """
+    train_ds = build_dataset("train", augment=True, three_channel=True)
+    val_ds = build_dataset("val", augment=False, three_channel=True)
+
+    model = build_resnet_transfer_model()
+
+    class_weights = compute_class_weights()
+    print(f"Computed class weights: {class_weights}")
+
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss", patience=8, restore_best_weights=True
+    )
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        filepath="models/resnet_transfer_best.keras",
+        monitor="val_loss", save_best_only=True
+    )
+    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
+        monitor="val_loss", factor=0.5, patience=3, min_lr=1e-6
+    )
+
+    history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=EPOCHS,
+        class_weight=class_weights,
+        callbacks=[early_stopping, checkpoint, reduce_lr],
+    )
+
+    return model, history
