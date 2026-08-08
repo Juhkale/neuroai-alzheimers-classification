@@ -1,0 +1,12 @@
+Evaluation: resnet_transfer
+
+                    precision    recall  f1-score   support
+
+      Non Demented      0.706     0.710     0.708       200
+Very mild Dementia      0.270     0.155     0.197       200
+     Mild Dementia      0.430     0.631     0.512       225
+ Moderate Dementia      0.870     0.795     0.831       244
+
+          accuracy                          0.586       869
+         macro avg      0.569     0.573     0.562       869
+      weighted avg      0.580     0.586     0.574       869

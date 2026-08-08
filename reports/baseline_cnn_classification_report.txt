@@ -1,0 +1,12 @@
+Evaluation: baseline_cnn
+
+                    precision    recall  f1-score   support
+
+      Non Demented      0.000     0.000     0.000       200
+Very mild Dementia      0.230     1.000     0.374       200
+     Mild Dementia      0.000     0.000     0.000       225
+ Moderate Dementia      0.000     0.000     0.000       244
+
+          accuracy                          0.230       869
+         macro avg      0.058     0.250     0.094       869
+      weighted avg      0.053     0.230     0.086       869
