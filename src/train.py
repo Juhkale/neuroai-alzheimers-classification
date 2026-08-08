@@ -29,6 +29,8 @@ import matplotlib.pyplot as plt
 
 from src.models import build_baseline_cnn, build_resnet_transfer_model
 
+import os
+
 EPOCHS = 20
 CHECKPOINT_PATH = "models/baseline_cnn_best.keras"
 
@@ -94,7 +96,7 @@ def train():
     return model, history
 
 
-def plot_training_history(history):
+def plot_training_history(history, save_path="reports/training_curves.png"):
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
     axes[0].plot(history.history["loss"], label="Train Loss")
@@ -110,7 +112,8 @@ def plot_training_history(history):
     axes[1].legend()
 
     plt.tight_layout()
-    plt.savefig("reports/training_curves.png", dpi=150)
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    plt.savefig(save_path, dpi=150)
     plt.show()
 
 
