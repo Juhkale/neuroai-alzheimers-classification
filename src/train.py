@@ -155,4 +155,7 @@ def train_resnet():
 
 if __name__ == "__main__":
     model, history = train()
-    plot_training_history(history)
+    plot_training_history(history, save_path="reports/baseline_training_curves.png")
+
+    resnet_model, resnet_history = train_resnet()
+    plot_training_history(resnet_history, save_path="reports/resnet_training_curves.png")
