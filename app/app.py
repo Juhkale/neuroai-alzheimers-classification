@@ -27,12 +27,14 @@ import matplotlib as mpl
 
 import sys
 import os
+import gdown
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.explainability import make_gradcam_heatmap, LAST_CONV_LAYER_NAME
 
 CLASS_NAMES = ["Non Demented", "Very mild Dementia", "Mild Dementia", "Moderate Dementia"]
 MODEL_PATH = "models/resnet_transfer_best.keras"
+GDRIVE_MODEL_FILE_ID = "1Jt_lXhbIl8gOZOFGD3ojEtB0ByHVtpTO"
 
 
 @st.cache_resource
@@ -41,7 +43,17 @@ def load_model():
     Loads the trained model once and caches it across reruns -- Streamlit
     reruns the whole script on every interaction, so without caching this
     would reload the model (slow) on every single click.
+
+    Since the trained model file (.keras) is too large for GitHub and is
+    excluded via .gitignore, it's hosted on Google Drive instead. If it's
+    not already present locally (first run, or a fresh deployment), it's
+    downloaded automatically before loading.
     """
+    if not os.path.exists(MODEL_PATH):
+        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+        with st.spinner("Downloading trained model (first run only)..."):
+            gdown.download(id=GDRIVE_MODEL_FILE_ID, output=MODEL_PATH, quiet=False)
+
     return tf.keras.models.load_model(MODEL_PATH)
 
 
