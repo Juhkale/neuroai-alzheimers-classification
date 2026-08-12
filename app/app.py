@@ -5,15 +5,23 @@ Streamlit demo app for the NeuroAI Alzheimer's classification project.
 
 WORKFLOW:
 Upload MRI slice -> Prediction -> Confidence scores -> Grad-CAM overlay
+-> (optional) plain-language explanation
 
-DESIGN NOTE -- WHY NO LLM LAYER YET:
-This first version is deliberately "deterministic only" -- confidence
-scores and Grad-CAM come straight from the model's actual math, nothing
-generated. This is the more important half of the trustworthy-AI story
-this project is built around: it's verifiable, has no external API
-dependency, and won't break during a live demo. A constrained LLM layer
-(plain-language translation of these grounded outputs) is planned as a
-follow-up addition, not a replacement for this core.
+TWO-LAYER EXPLANATION ARCHITECTURE:
+------------------------------------
+Layer 1 (always shown, deterministic): confidence score + Grad-CAM
+heatmap, computed directly from the model's own math. This is the more
+important layer -- it's verifiable, has no external dependency, and is
+the actual evidence behind the prediction.
+
+Layer 2 (optional, on-demand): a constrained LLM call that TRANSLATES
+the Layer 1 facts into plain language for a non-technical reader. The
+LLM is explicitly restricted from adding new medical claims or reasoning
+independently about the diagnosis -- it only restates grounded facts
+already computed. This distinction (translation vs. independent
+judgment) is the core trustworthy-AI pattern this project is built
+around. Layer 2 is triggered by a button, not automatic, since each
+call costs money and isn't needed for the app's core value.
 
 IMPORTANT: This is a research/educational prototype, NOT a diagnostic
 tool. See the in-app disclaimer.
@@ -28,9 +36,11 @@ import matplotlib as mpl
 import sys
 import os
 import gdown
+from openai import OpenAI
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.explainability import make_gradcam_heatmap, LAST_CONV_LAYER_NAME
+from src.explainability import make_gradcam_heatmap
 
 CLASS_NAMES = ["Non Demented", "Very mild Dementia", "Mild Dementia", "Moderate Dementia"]
 MODEL_PATH = "models/resnet_transfer_best.keras"
@@ -92,6 +102,76 @@ def overlay_heatmap(display_img: np.ndarray, heatmap: np.ndarray, alpha: float =
 
     overlaid = display_img * (1 - alpha) + heatmap_colored * alpha
     return np.clip(overlaid, 0, 1)
+
+
+def describe_heatmap_location(heatmap: np.ndarray) -> str:
+    """
+    Finds the peak-intensity location in the heatmap and describes it in
+    plain, rough terms (e.g. "upper right", "lower center"). This is
+    computed directly from the heatmap array -- deterministic, not
+    LLM-generated -- so it's grounded evidence, same as the confidence
+    score, rather than something the LLM has to guess or invent.
+    """
+    max_pos = np.unravel_index(np.argmax(heatmap), heatmap.shape)
+    row, col = max_pos
+    n_rows, n_cols = heatmap.shape
+
+    vertical = "upper" if row < n_rows / 2 else "lower"
+    horizontal = "left" if col < n_cols / 2 else "right"
+
+    return f"{vertical} {horizontal}"
+
+
+def get_openai_api_key():
+    """
+    Checks Streamlit's secrets manager first (used once deployed),
+    falling back to a local environment variable (used for local testing).
+    """
+    if "OPENAI_API_KEY" in st.secrets:
+        return st.secrets["OPENAI_API_KEY"]
+    return os.environ.get("OPENAI_API_KEY")
+
+
+def generate_llm_explanation(predicted_class: str, confidence: float, location_desc: str) -> str:
+    """
+    Generates a plain-language explanation using ONLY the grounded facts
+    already computed (predicted_class, confidence, location_desc) -- the
+    model is explicitly constrained to restate and contextualize these
+    facts, not to reason independently about the diagnosis or invent
+    additional clinical claims. This is the "constrained generation"
+    layer described in the project README: deterministic evidence first,
+    language model second, never the other way around.
+    """
+    client = OpenAI(api_key=get_openai_api_key())
+
+    system_prompt = (
+        "You are a plain-language assistant for a research prototype MRI classification tool. "
+        "You will be given a predicted class, a confidence score, and a rough description of where "
+        "the model's attention was concentrated on the scan. Your ONLY job is to restate these exact "
+        "facts in one or two clear, accessible sentences for a non-technical reader. "
+        "Do NOT add any new medical claims, diagnoses, or reasoning beyond what is given. "
+        "Do NOT speculate about the patient's actual condition. "
+        "Always include a brief reminder that this is a research prototype, not a diagnosis."
+    )
+
+    user_prompt = (
+        f"Predicted class: {predicted_class}\n"
+        f"Confidence: {confidence:.1%}\n"
+        f"Model attention concentrated in the: {location_desc} region of the scan\n\n"
+        "Write a short, plain-language summary of these exact facts."
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=150,
+        temperature=0.3,  # low temperature -- consistent restatement, not creative variation
+    )
+
+    return response.choices[0].message.content
 
 
 def main():
@@ -158,6 +238,19 @@ def main():
             "*mixed* alignment, not consistent alignment. See the README's Explainability section "
             "for a full discussion."
         )
+
+        st.divider()
+        st.subheader("Plain-Language Explanation (Optional)")
+        st.caption(
+            "Generates a short, plain-language summary using only the grounded facts above -- "
+            "the AI model is explicitly restricted from adding new medical claims or reasoning "
+            "beyond what's already been computed."
+        )
+        if st.button("Generate plain-language explanation"):
+            with st.spinner("Generating explanation..."):
+                location_desc = describe_heatmap_location(heatmap)
+                explanation = generate_llm_explanation(predicted_class, confidence, location_desc)
+            st.success(explanation)
 
     else:
         st.info("Upload an MRI slice above to get started.")
